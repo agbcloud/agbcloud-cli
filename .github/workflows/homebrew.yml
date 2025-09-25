@@ -1,11 +1,11 @@
 # Agb CLI Official Homebrew Release Pipeline
 name: Agb CLI Official Homebrew Release
 
-# Trigger conditions - 支持标签触发和手动触发
+# Trigger conditions - Support tag triggers and manual triggers
 on:
   push:
     tags:
-      - 'v*'  # 正式版本标签触发
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -112,13 +112,13 @@ jobs:
         run: |
           echo "Setting up build variables for official release..."
 
-          # 使用正式版本号，支持标签触发和手动输入
+          # Use official version number, support tag triggers and manual input
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
             export VERSION="${{ github.event.inputs.version }}"
             echo "Using manual input version: $VERSION"
           elif [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             export VERSION="${{ github.ref_name }}"
-            # 移除 v 前缀
+            # Remove v prefix
             export VERSION="${VERSION#v}"
             echo "Using tag version: $VERSION"
           else
@@ -126,7 +126,7 @@ jobs:
             exit 1
           fi
 
-          # 验证版本号格式（语义化版本）
+          # Validate version format (semantic versioning)
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?(\+[a-zA-Z0-9]+)?$ ]]; then
             echo "❌ Invalid version format: $VERSION"
             echo "   Version must follow semantic versioning (e.g., 1.0.0, 1.2.3-beta, 2.0.0+build.1)"
@@ -407,20 +407,20 @@ jobs:
           echo "🍺 Creating Official Homebrew Formula..."
           mkdir -p homebrew
 
-          # 直接搜索 packages 目录中的文件
+          # Search for files directly in packages directory
           declare -A FILES SHA256S
 
           echo "🔍 Searching for platform binaries in packages/..."
 
-          # 搜索 macOS 文件
+          # Search for macOS files
           DARWIN_AMD64_FILE=$(ls packages/*darwin*amd64*.tar.gz 2>/dev/null | head -1)
           DARWIN_ARM64_FILE=$(ls packages/*darwin*arm64*.tar.gz 2>/dev/null | head -1)
 
-          # 搜索 Linux 文件
+          # Search for Linux files
           LINUX_AMD64_FILE=$(ls packages/*linux*amd64*.tar.gz 2>/dev/null | head -1)
           LINUX_ARM64_FILE=$(ls packages/*linux*arm64*.tar.gz 2>/dev/null | head -1)
 
-          # 计算 SHA256
+          # Calculate SHA256
           if [[ -n "$DARWIN_AMD64_FILE" ]]; then
             FILES[darwin-amd64]="$DARWIN_AMD64_FILE"
             SHA256S[darwin-amd64]=$(sha256sum "$DARWIN_AMD64_FILE" | cut -d ' ' -f1)
@@ -445,7 +445,7 @@ jobs:
             echo "✓ Found linux-arm64: $(basename "$LINUX_ARM64_FILE")"
           fi
 
-          # 验证至少有一个 macOS 文件（Homebrew 官方要求）
+          # Verify at least one macOS file exists (Homebrew official requirement)
           if [[ -z "${FILES[darwin-amd64]}" && -z "${FILES[darwin-arm64]}" ]]; then
             echo "❌ No macOS binaries found for Homebrew Formula!"
             echo "   macOS support is required for Homebrew core repository"
@@ -453,7 +453,7 @@ jobs:
             exit 1
           fi
 
-          # 创建符合官方标准的 Homebrew Formula
+          # Create Homebrew Formula that meets official standards
           cat > homebrew/agb.rb << FORMULA_EOF
           class Agb < Formula
             desc "Secure infrastructure for running AI-generated code"
@@ -464,9 +464,9 @@ jobs:
             on_macos do
           FORMULA_EOF
 
-          # 添加 macOS 支持
+          # Add macOS support
           if [[ -n "${FILES[darwin-amd64]}" && -n "${FILES[darwin-arm64]}" ]]; then
-            # 多架构 macOS 支持
+            # Multi-architecture macOS support
             cat >> homebrew/agb.rb << MACOS_EOF
               if Hardware::CPU.intel?
                 url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[darwin-amd64]}")"
@@ -477,13 +477,13 @@ jobs:
               end
           MACOS_EOF
           elif [[ -n "${FILES[darwin-amd64]}" ]]; then
-            # 仅 Intel macOS 支持
+            # Intel macOS support only
             cat >> homebrew/agb.rb << MACOS_INTEL_EOF
               url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[darwin-amd64]}")"
               sha256 "${SHA256S[darwin-amd64]}"
           MACOS_INTEL_EOF
           elif [[ -n "${FILES[darwin-arm64]}" ]]; then
-            # 仅 ARM macOS 支持
+            # ARM macOS support only
             cat >> homebrew/agb.rb << MACOS_ARM_EOF
               url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[darwin-arm64]}")"
               sha256 "${SHA256S[darwin-arm64]}"
@@ -496,9 +496,9 @@ jobs:
             on_linux do
           LINUX_START_EOF
 
-          # 添加 Linux 支持
+          # Add Linux support
           if [[ -n "${FILES[linux-amd64]}" && -n "${FILES[linux-arm64]}" ]]; then
-            # 多架构 Linux 支持
+            # Multi-architecture Linux support
             cat >> homebrew/agb.rb << LINUX_EOF
               if Hardware::CPU.intel?
                 url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[linux-amd64]}")"
@@ -509,20 +509,20 @@ jobs:
               end
           LINUX_EOF
           elif [[ -n "${FILES[linux-amd64]}" ]]; then
-            # 仅 Intel Linux 支持
+            # Intel Linux support only
             cat >> homebrew/agb.rb << LINUX_INTEL_EOF
               url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[linux-amd64]}")"
               sha256 "${SHA256S[linux-amd64]}"
           LINUX_INTEL_EOF
           elif [[ -n "${FILES[linux-arm64]}" ]]; then
-            # 仅 ARM Linux 支持
+            # ARM Linux support only
             cat >> homebrew/agb.rb << LINUX_ARM_EOF
               url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[linux-arm64]}")"
               sha256 "${SHA256S[linux-arm64]}"
           LINUX_ARM_EOF
           fi
 
-          # 添加安装和测试方法（符合官方标准，包含兼容性处理）
+          # Add installation and test methods (meets official standards, includes compatibility handling)
           cat >> homebrew/agb.rb << 'INSTALL_EOF'
             end
 
@@ -570,7 +570,7 @@ jobs:
         run: |
           echo "🍺 Preparing submission to Homebrew Core Repository..."
           
-          # 提交更新的 formula 到主仓库
+          # Commit updated formula to main repository
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add homebrew/agb.rb
@@ -614,13 +614,13 @@ jobs:
         run: |
           echo "🧪 Validating Official Homebrew Formula..."
 
-          # 验证 formula 文件语法和内容
+          # Validate formula file syntax and content
           echo "📋 Checking formula compliance..."
           
           if [[ -f "homebrew/agb.rb" ]]; then
             echo "✅ Formula file exists: homebrew/agb.rb"
             
-            # 添加调试信息，显示文件内容的关键部分
+            # Add debug information, show key parts of file content
             echo ""
             echo "🔍 Formula content preview:"
             echo "Class line: $(grep "class.*Formula" homebrew/agb.rb || echo 'Not found')"
@@ -630,11 +630,11 @@ jobs:
             echo "Test section: $(grep -A 2 "test do" homebrew/agb.rb || echo 'Not found')"
             echo ""
 
-            # 检查官方要求的必要字段
+            # Check required fields for official requirements
             checks_passed=0
             total_checks=8
 
-            # 检查1: 类名
+            # Check 1: Class name
             if grep -q "class Agb < Formula" homebrew/agb.rb; then
               echo "✅ Correct class name: Agb"
               checks_passed=$((checks_passed + 1))
@@ -642,7 +642,7 @@ jobs:
               echo "❌ Incorrect class name (should be 'Agb')"
             fi
 
-            # 检查2: 描述
+            # Check 2: Description
             if grep -q 'desc.*"Secure infrastructure for running AI-generated code"' homebrew/agb.rb; then
               echo "✅ Descriptive description found"
               checks_passed=$((checks_passed + 1))
@@ -651,7 +651,7 @@ jobs:
               echo "   Debug: Description check: $(grep -q 'desc.*"Secure infrastructure for running AI-generated code"' homebrew/agb.rb && echo 'PASS' || echo 'FAIL')"
             fi
 
-            # 检查3: 主页
+            # Check 3: Homepage
             if grep -q 'homepage.*github.com' homebrew/agb.rb; then
               echo "✅ Homepage URL found"
               checks_passed=$((checks_passed + 1))
@@ -659,7 +659,7 @@ jobs:
               echo "❌ Missing homepage URL"
             fi
 
-            # 检查4: 许可证
+            # Check 4: License
             if grep -q 'license.*MIT' homebrew/agb.rb; then
               echo "✅ License specified"
               checks_passed=$((checks_passed + 1))
@@ -667,7 +667,7 @@ jobs:
               echo "❌ Missing license specification"
             fi
 
-            # 检查5: 版本 - 修改版本检查，允许变量或具体版本号
+            # Check 5: Version - Modified version check, allow variables or specific version numbers
             if grep -q 'version.*"' homebrew/agb.rb; then
               version_line=$(grep 'version.*"' homebrew/agb.rb)
               if [[ "$version_line" =~ version.*\"\$VERSION\" ]] || [[ "$version_line" =~ version.*\"[0-9]+\.[0-9]+\.[0-9]+ ]]; then
@@ -680,7 +680,7 @@ jobs:
               echo "❌ Missing explicit version"
             fi
 
-            # 检查6: 下载URL
+            # Check 6: Download URL
             if grep -q 'url.*releases/download' homebrew/agb.rb; then
               echo "✅ Download URL found"
               checks_passed=$((checks_passed + 1))
@@ -688,7 +688,7 @@ jobs:
               echo "❌ Missing download URL"
             fi
 
-            # 检查7: SHA256
+            # Check 7: SHA256
             if grep -q 'sha256' homebrew/agb.rb; then
               sha256_count=$(grep -c 'sha256' homebrew/agb.rb)
               if [[ $sha256_count -ge 2 ]]; then
@@ -701,7 +701,7 @@ jobs:
               echo "❌ Missing SHA256 checksum"
             fi
 
-            # 检查8: 测试套件
+            # Check 8: Test suite
             if grep -q 'test do' homebrew/agb.rb && grep -q 'assert_match' homebrew/agb.rb; then
               echo "✅ Comprehensive test suite found"
               checks_passed=$((checks_passed + 1))
@@ -723,7 +723,7 @@ jobs:
               echo "⚠️ Formula needs improvements before submission"
             fi
 
-            # 验证语法（如果 Homebrew 可用）
+            # Validate syntax (if Homebrew is available)
             if command -v brew >/dev/null 2>&1; then
               echo ""
               echo "🔍 Running Homebrew syntax validation..."
