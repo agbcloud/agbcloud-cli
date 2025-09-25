@@ -1,5 +1,5 @@
 # Build variables
-BINARY_NAME=agbcloud
+BINARY_NAME=agb
 VERSION?=dev
 GIT_COMMIT?=$(shell git rev-parse --short HEAD)
 BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -20,11 +20,17 @@ build:
 .PHONY: build-all
 build-all: build-linux build-darwin build-windows
 
-# Build for Linux
+# Build Linux with maximum compatibility (static + older glibc target)
+.PHONY: build-linux-compat
+build-linux-compat:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -a -installsuffix cgo -tags netgo -ldflags '-extldflags "-static"' -o bin/$(BINARY_NAME)-linux-amd64-compat .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -a -installsuffix cgo -tags netgo -ldflags '-extldflags "-static"' -o bin/$(BINARY_NAME)-linux-arm64-compat .
+
+# Build for Linux (static compilation for better compatibility)
 .PHONY: build-linux
 build-linux:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-amd64 .
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-arm64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -a -installsuffix cgo -o bin/$(BINARY_NAME)-linux-amd64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -a -installsuffix cgo -o bin/$(BINARY_NAME)-linux-arm64 .
 
 # Build for macOS
 .PHONY: build-darwin
@@ -109,7 +115,8 @@ help:
 	@echo "Available targets:"
 	@echo "  build        - Build for current platform"
 	@echo "  build-all    - Build for all platforms"
-	@echo "  build-linux  - Build for Linux (amd64, arm64)"
+	@echo "  build-linux  - Build for Linux (amd64, arm64) with static compilation"
+	@echo "  build-linux-compat - Build for Linux with maximum compatibility"
 	@echo "  build-darwin - Build for macOS (amd64, arm64)"
 	@echo "  build-windows- Build for Windows (amd64, arm64)"
 	@echo "  clean        - Clean build artifacts"
