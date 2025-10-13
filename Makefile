@@ -4,8 +4,8 @@ VERSION?=dev
 GIT_COMMIT?=$(shell git rev-parse --short HEAD)
 BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Build flags
-LDFLAGS=-ldflags "-X github.com/agbcloud/agbcloud-cli/cmd.Version=$(VERSION) -X github.com/agbcloud/agbcloud-cli/cmd.GitCommit=$(GIT_COMMIT) -X github.com/agbcloud/agbcloud-cli/cmd.BuildDate=$(BUILD_DATE)"
+# Build flags (with optimization)
+LDFLAGS=-ldflags "-s -w -X github.com/agbcloud/agbcloud-cli/cmd.Version=$(VERSION) -X github.com/agbcloud/agbcloud-cli/cmd.GitCommit=$(GIT_COMMIT) -X github.com/agbcloud/agbcloud-cli/cmd.BuildDate=$(BUILD_DATE)"
 
 # Default target
 .PHONY: all
@@ -16,15 +16,9 @@ all: build
 build:
 	go build $(LDFLAGS) -o bin/$(BINARY_NAME) .
 
-# Build for all platforms
+# Build for all platforms (existing individual targets)
 .PHONY: build-all
 build-all: build-linux build-darwin build-windows
-
-# Build Linux with maximum compatibility (static + older glibc target)
-.PHONY: build-linux-compat
-build-linux-compat:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -a -installsuffix cgo -tags netgo -ldflags '-extldflags "-static"' -o bin/$(BINARY_NAME)-linux-amd64-compat .
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -a -installsuffix cgo -tags netgo -ldflags '-extldflags "-static"' -o bin/$(BINARY_NAME)-linux-arm64-compat .
 
 # Build for Linux (static compilation for better compatibility)
 .PHONY: build-linux
@@ -44,44 +38,34 @@ build-windows:
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe .
 	GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-arm64.exe .
 
+# Unified build target (类似 actions-batch 风格)
+.PHONY: dist
+dist:
+	mkdir -p bin
+	# macOS builds (Homebrew 支持)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-amd64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-arm64 .
+	# Linux builds (Homebrew 支持)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-amd64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-arm64 .
+	# Windows builds (不被 Homebrew 支持，但可用于其他分发)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe .
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-arm64.exe .
+
+# Generate hash files
+.PHONY: hash
+hash:
+	cd bin && find . -name "$(BINARY_NAME)-*" -type f | xargs -I {} sh -c 'sha256sum "{}" > "{}.sha256"'
+
 # Clean build artifacts
 .PHONY: clean
 clean:
 	rm -rf bin/ coverage.out coverage.html
 
-# Run unit tests (default)
+# Run tests
 .PHONY: test
-test: test-unit
-
-# Run unit tests
-.PHONY: test-unit
-test-unit:
-	@echo "Running unit tests..."
-	@./scripts/test.sh --unit-only
-
-# Run integration tests
-.PHONY: test-integration
-test-integration:
-	@echo "Running integration tests..."
-	@./scripts/test.sh --integration-only
-
-# Run all tests (unit + integration)
-.PHONY: test-all
-test-all:
-	@echo "Running all tests..."
-	@./scripts/test.sh --all
-
-# Run tests with coverage
-.PHONY: test-coverage
-test-coverage:
-	@echo "Running tests with coverage..."
-	@./scripts/test.sh --unit-only --verbose
-
-# Run tests in verbose mode
-.PHONY: test-verbose
-test-verbose:
-	@echo "Running tests in verbose mode..."
-	@./scripts/test.sh --unit-only --verbose
+test:
+	go test ./... -cover
 
 # Run linter
 .PHONY: lint
@@ -114,21 +98,14 @@ dev: build
 help:
 	@echo "Available targets:"
 	@echo "  build        - Build for current platform"
-	@echo "  build-all    - Build for all platforms"
-	@echo "  build-linux  - Build for Linux (amd64, arm64) with static compilation"
-	@echo "  build-linux-compat - Build for Linux with maximum compatibility"
-	@echo "  build-darwin - Build for macOS (amd64, arm64)"
-	@echo "  build-windows- Build for Windows (amd64, arm64)"
+	@echo "  build-all    - Build for all platforms (individual targets)"
+	@echo "  dist         - Build for all platforms (unified target)"
+	@echo "  hash         - Generate SHA256 hash files"
 	@echo "  clean        - Clean build artifacts"
-	@echo "  test         - Run unit tests (default)"
-	@echo "  test-unit    - Run unit tests only"
-	@echo "  test-integration - Run integration tests only"
-	@echo "  test-all     - Run all tests (unit + integration)"
-	@echo "  test-coverage - Run tests with coverage report"
-	@echo "  test-verbose - Run tests in verbose mode"
+	@echo "  test         - Run tests"
 	@echo "  lint         - Run linter"
 	@echo "  fmt          - Format code"
 	@echo "  deps         - Install dependencies"
 	@echo "  install      - Install binary to GOPATH/bin"
 	@echo "  dev          - Build and run for development"
-	@echo "  help         - Show this help" 
+	@echo "  help         - Show this help"
