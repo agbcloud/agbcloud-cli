@@ -22,7 +22,7 @@ permissions:
 
 # 环境变量
 env:
-  HOMEBREW_TAP_REPO: 'homebrew-core'  # 目标仓库名称
+  HOMEBREW_TAP_REPO: 'agbcloud-homebrew'  # 目标仓库名称
   SOURCE_RB_PATH: 'homebrew/agb.rb'  # 源rb文件路径
   TARGET_RB_PATH: 'Formula/agb.rb'   # 目标rb文件路径
 
@@ -140,17 +140,17 @@ jobs:
           cat /tmp/agb.rb.tmp
           echo "========================"
 
-      - name: Clone homebrew-core repository
+      - name: Clone agbcloud-homebrew repository
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Cloning homebrew-core repository..."
-          echo "Repository URL: https://github.com/${{ github.repository_owner }}/${{ env.HOMEBREW_TAP_REPO }}.git"
+          echo "Cloning agbcloud-homebrew repository..."
+          echo "Repository URL: https://github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}.git"
           
           # 克隆目标仓库
-          git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository_owner }}/${{ env.HOMEBREW_TAP_REPO }}.git" homebrew-tap
+          git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}.git" homebrew-tap
           
-          echo "✅ Successfully cloned homebrew-core repository"
+          echo "✅ Successfully cloned agbcloud-homebrew repository"
           
           # 显示仓库信息
           cd homebrew-tap
@@ -159,9 +159,9 @@ jobs:
           ls -la
           cd ..
 
-      - name: Update Formula in homebrew-core repository
+      - name: Update Formula in agbcloud-homebrew repository
         run: |
-          echo "Updating Formula in homebrew-core repository..."
+          echo "Updating Formula in agbcloud-homebrew repository..."
           
           cd homebrew-tap
           
@@ -217,9 +217,9 @@ jobs:
           echo "✅ Formula committed successfully"
           
           # 推送到远程仓库
-          echo "Pushing changes to homebrew-core repository..."
+          echo "Pushing changes to agbcloud-homebrew repository..."
           if git push origin main 2>/dev/null || git push origin master 2>/dev/null; then
-            echo "✅ Successfully pushed Formula to homebrew-core repository"
+            echo "✅ Successfully pushed Formula to agbcloud-homebrew repository"
           else
             echo "⚠️ Failed to push to existing branch, trying to create new branch..."
             git push -u origin HEAD:main
@@ -233,17 +233,17 @@ jobs:
           echo ""
           echo "📋 Summary:"
           echo "  - Source repository: ${{ github.repository }}"
-          echo "  - Target repository: ${{ github.repository_owner }}/${{ env.HOMEBREW_TAP_REPO }}"
+          echo "  - Target repository: agbcloud/${{ env.HOMEBREW_TAP_REPO }}"
           echo "  - Formula version: $VERSION"
           echo "  - Source file: ${{ env.SOURCE_RB_PATH }}"
           echo "  - Target file: ${{ env.TARGET_RB_PATH }}"
           echo ""
           echo "🍺 Users can now install with:"
-          echo "  brew tap ${{ github.repository_owner }}/${{ env.HOMEBREW_TAP_REPO }}"
+          echo "  brew tap agbcloud/${{ env.HOMEBREW_TAP_REPO }}"
           echo "  brew install agb"
           echo ""
           echo "🔗 Repository URL:"
-          echo "  https://github.com/${{ github.repository_owner }}/${{ env.HOMEBREW_TAP_REPO }}"
+          echo "  https://github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}"
 
   # 当参数为false时显示跳过信息
   skip-push:
@@ -254,6 +254,6 @@ jobs:
     steps:
       - name: Skip message
         run: |
-          echo "⏭️ Skipping push to homebrew-core repository"
+          echo "⏭️ Skipping push to agbcloud-homebrew repository"
           echo "   Reason: push_to_tap parameter is set to '${{ github.event.inputs.push_to_tap }}'"
           echo "   To enable push, set the parameter to 'true' when running this workflow manually"
