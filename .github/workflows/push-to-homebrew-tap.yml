@@ -61,7 +61,7 @@ jobs:
       - name: Determine version
         id: version
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           if [[ -n "${{ github.event.inputs.version }}" ]]; then
             INPUT_VERSION="${{ github.event.inputs.version }}"
@@ -140,9 +140,9 @@ jobs:
           cat /tmp/agb.rb.tmp
           echo "========================"
 
-      - name: Clone agbcloud-homebrew repository
+      - name: Clone or create agbcloud-homebrew repository
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           echo "Cloning agbcloud-homebrew repository..."
           echo "Repository URL: https://github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}.git"
@@ -193,7 +193,7 @@ jobs:
 
       - name: Commit and push changes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           cd homebrew-tap
           
