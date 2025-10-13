@@ -148,7 +148,7 @@ jobs:
           echo "Repository URL: https://github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}.git"
           
           # 克隆目标仓库
-          git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}.git" homebrew-tap
+          git clone "https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}.git" homebrew-tap
           
           echo "✅ Successfully cloned agbcloud-homebrew repository"
           
