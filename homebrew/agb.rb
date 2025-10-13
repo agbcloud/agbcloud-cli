@@ -1,53 +1,53 @@
 class Agb < Formula
   desc "Secure infrastructure for running AI-generated code"
-  homepage "https://github.com/agbcloud/agbcloud-cli"
-  version "1.1.6"
+  homepage "https://github.com/litiantian123-code/agbcloud-cli"
+  url "https://github.com/litiantian123-code/agbcloud-cli/archive/refs/tags/v1.1.7.tar.gz"
+  sha256 "6205f43c88566d3ad3ea2b4f2c9285d0bbe4c02c91339e67b106372a87b7e71c"
   license "MIT"
+  head "https://github.com/litiantian123-code/agbcloud-cli.git", branch: "main"
 
-  on_macos do
-    if Hardware::CPU.intel?
-      url "https://github.com/agbcloud/agbcloud-cli/releases/download/v1.1.6/agb-1.1.6-darwin-amd64.tar.gz"
-      sha256 "ba1e634acee3eebf1c77324cfcd09419380ee06d9f6201037745b53066bd98f9"
-    elsif Hardware::CPU.arm? || Hardware::CPU.arch == :arm64
-      url "https://github.com/agbcloud/agbcloud-cli/releases/download/v1.1.6/agb-1.1.6-darwin-arm64.tar.gz"
-      sha256 "4d8cc682fa171d705f91f0552cd2d8016b4433fed2abdc3aea2b35c724d87c81"
-    end
-  end
-
-  on_linux do
-    if Hardware::CPU.intel?
-      url "https://github.com/agbcloud/agbcloud-cli/releases/download/v1.1.6/agb-1.1.6-linux-amd64.tar.gz"
-      sha256 "35320d046c9555c4d57fa443d9b4730235353ee05318cc37d8d2b48199b64e48"
-    elsif Hardware::CPU.arm? || Hardware::CPU.arch == :arm64
-      url "https://github.com/agbcloud/agbcloud-cli/releases/download/v1.1.6/agb-1.1.6-linux-arm64.tar.gz"
-      sha256 "6862efa459c95b11ff87680d0a5e47ca1a7fd1e302d6e84c2e3c772988802d39"
-    end
-  end
+  depends_on "go" => :build
 
   def install
-    bin.install "agb"
+    # Set build variables matching the Makefile
+    version = self.version
+    # Handle git commit safely (archive tarball doesn't have .git directory)
+    git_commit = begin
+      Utils.safe_popen_read("git", "rev-parse", "--short", "HEAD").chomp
+    rescue
+      "unknown"
+    end
+    build_date = Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Set Go proxy for better network connectivity (especially in China)
+    ENV["GOPROXY"] = "https://goproxy.cn,https://goproxy.io,https://proxy.golang.org,direct"
+    ENV["GOSUMDB"] = "sum.golang.google.cn"
+    ENV["GO111MODULE"] = "on"
+
+    # Build flags matching your Makefile LDFLAGS (with optimization)
+    ldflags = %W[
+      -s
+      -w
+      -X github.com/agbcloud/agbcloud-cli/cmd.Version=#{version}
+      -X github.com/agbcloud/agbcloud-cli/cmd.GitCommit=#{git_commit}
+      -X github.com/agbcloud/agbcloud-cli/cmd.BuildDate=#{build_date}
+    ]
+
+    # Build from source using Go
+    system "go", "build", *std_go_args(ldflags: ldflags), "."
   end
 
   test do
     # Test that binary is executable
     assert_predicate bin/"agb", :executable?
 
-    # Check if we can run the binary (skip if GLIBC incompatible)
-    begin
-      # Test version command
-      system bin/"agb", "--version"
+    # Test version command
+    version_output = shell_output("#{bin}/agb version 2>&1")
+    assert_match version.to_s, version_output
 
-      # Test help command
-      help_output = shell_output("#{bin}/agb --help")
-      assert_match "agb", help_output
-      assert_match "help", help_output
-    rescue => e
-      # Skip functional tests if binary cannot run due to system incompatibility
-      if e.message.include?("GLIBC") || e.message.include?("not found")
-        ohai "Skipping functional tests due to system incompatibility"
-      else
-        raise e
-      end
-    end
+    # Test help command
+    help_output = shell_output("#{bin}/agb --help")
+    assert_match "agb", help_output
+    assert_match "help", help_output
   end
 end
