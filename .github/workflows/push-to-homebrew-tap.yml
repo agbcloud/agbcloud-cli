@@ -22,7 +22,7 @@ permissions:
 
 # 环境变量
 env:
-  HOMEBREW_TAP_REPO: 'agbcloud-homebrew'  # 目标仓库名称
+  HOMEBREW_TAP_REPO: 'homebrew-agb'  # 目标仓库名称
   SOURCE_RB_PATH: 'homebrew/agb.rb'  # 源rb文件路径
   TARGET_RB_PATH: 'Formula/agb.rb'   # 目标rb文件路径
 
@@ -140,17 +140,17 @@ jobs:
           cat /tmp/agb.rb.tmp
           echo "========================"
 
-      - name: Clone or create agbcloud-homebrew repository
+      - name: Clone or create homebrew-agb repository
         env:
           GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          echo "Cloning agbcloud-homebrew repository..."
+          echo "Cloning homebrew-agb repository..."
           echo "Repository URL: https://github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}.git"
           
           # 克隆目标仓库
           git clone "https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/agbcloud/${{ env.HOMEBREW_TAP_REPO }}.git" homebrew-tap
           
-          echo "✅ Successfully cloned agbcloud-homebrew repository"
+          echo "✅ Successfully cloned homebrew-agb repository"
           
           # 显示仓库信息
           cd homebrew-tap
@@ -159,9 +159,9 @@ jobs:
           ls -la
           cd ..
 
-      - name: Update Formula in agbcloud-homebrew repository
+      - name: Update Formula in homebrew-agb repository
         run: |
-          echo "Updating Formula in agbcloud-homebrew repository..."
+          echo "Updating Formula in homebrew-agb repository..."
           
           cd homebrew-tap
           
@@ -217,9 +217,9 @@ jobs:
           echo "✅ Formula committed successfully"
           
           # 推送到远程仓库
-          echo "Pushing changes to agbcloud-homebrew repository..."
+          echo "Pushing changes to homebrew-agb repository..."
           if git push origin main 2>/dev/null || git push origin master 2>/dev/null; then
-            echo "✅ Successfully pushed Formula to agbcloud-homebrew repository"
+            echo "✅ Successfully pushed Formula to homebrew-agb repository"
           else
             echo "⚠️ Failed to push to existing branch, trying to create new branch..."
             git push -u origin HEAD:main
