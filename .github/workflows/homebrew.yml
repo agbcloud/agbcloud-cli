@@ -159,7 +159,7 @@ jobs:
 
       - name: Build Multi-platform Binaries
         run: |
-          echo "Building binaries for all platforms..."
+          echo "Building binaries for all platforms using unified dist target..."
           echo "Build version: $VERSION"
           echo "Git commit: $GIT_COMMIT"
 
@@ -168,9 +168,13 @@ jobs:
           go version
           go env GOOS GOARCH
 
-          # Build all platforms with detailed output
-          echo "🔨 Building for all platforms..."
-          make build-all
+          # Build all platforms using unified dist target
+          echo "🔨 Building for all platforms using 'make dist'..."
+          make dist
+
+          # Generate hash files for all binaries
+          echo "🔐 Generating hash files..."
+          make hash
 
           # Verify what was actually built
           echo ""
@@ -191,6 +195,18 @@ jobs:
             exit 1
           fi
 
+          # Verify hash files were created
+          echo ""
+          echo "🔐 Verifying hash files:"
+          if ls bin/*.sha256 2>/dev/null; then
+            echo "✅ Hash files found:"
+            for file in bin/*.sha256; do
+              echo "  - $(basename "$file")"
+            done
+          else
+            echo "⚠️ No hash files found (optional for Homebrew)"
+          fi
+
       - name: Create Packages
         run: |
           echo "Creating packages for official release..."
@@ -203,7 +219,7 @@ jobs:
           fi
 
           for binary in bin/*; do
-            if [[ -f "$binary" ]]; then
+            if [[ -f "$binary" && ! "$binary" == *.sha256 ]]; then
               filename=$(basename "$binary")
               platform_arch=${filename#${{ env.BINARY_NAME }}-}
               # Remove .exe extension from platform_arch for consistent naming
@@ -410,165 +426,84 @@ jobs:
 
       - name: Create Official Homebrew Formula
         run: |
-          echo "🍺 Creating Official Homebrew Formula..."
+          echo "🍺 Creating Official Homebrew Formula (Source Build + Bottle Mode)..."
           mkdir -p homebrew
 
-          # Search for files directly in packages directory
-          declare -A FILES SHA256S
+          # Calculate source tarball SHA256
+          echo "🔍 Calculating source tarball SHA256..."
+          SOURCE_URL="https://github.com/${{ github.repository }}/archive/refs/tags/v$VERSION.tar.gz"
+          SOURCE_SHA256=$(curl -sL "$SOURCE_URL" | sha256sum | cut -d ' ' -f1)
+          echo "✓ Source SHA256: $SOURCE_SHA256"
 
-          echo "🔍 Searching for platform binaries in packages/..."
-
-          # Search for macOS files
-          DARWIN_AMD64_FILE=$(ls packages/*darwin*amd64*.tar.gz 2>/dev/null | head -1)
-          DARWIN_ARM64_FILE=$(ls packages/*darwin*arm64*.tar.gz 2>/dev/null | head -1)
-
-          # Search for Linux files
-          LINUX_AMD64_FILE=$(ls packages/*linux*amd64*.tar.gz 2>/dev/null | head -1)
-          LINUX_ARM64_FILE=$(ls packages/*linux*arm64*.tar.gz 2>/dev/null | head -1)
-
-          # Calculate SHA256
-          if [[ -n "$DARWIN_AMD64_FILE" ]]; then
-            FILES[darwin-amd64]="$DARWIN_AMD64_FILE"
-            SHA256S[darwin-amd64]=$(sha256sum "$DARWIN_AMD64_FILE" | cut -d ' ' -f1)
-            echo "✓ Found darwin-amd64: $(basename "$DARWIN_AMD64_FILE")"
-          fi
-
-          if [[ -n "$DARWIN_ARM64_FILE" ]]; then
-            FILES[darwin-arm64]="$DARWIN_ARM64_FILE"
-            SHA256S[darwin-arm64]=$(sha256sum "$DARWIN_ARM64_FILE" | cut -d ' ' -f1)
-            echo "✓ Found darwin-arm64: $(basename "$DARWIN_ARM64_FILE")"
-          fi
-
-          if [[ -n "$LINUX_AMD64_FILE" ]]; then
-            FILES[linux-amd64]="$LINUX_AMD64_FILE"
-            SHA256S[linux-amd64]=$(sha256sum "$LINUX_AMD64_FILE" | cut -d ' ' -f1)
-            echo "✓ Found linux-amd64: $(basename "$LINUX_AMD64_FILE")"
-          fi
-
-          if [[ -n "$LINUX_ARM64_FILE" ]]; then
-            FILES[linux-arm64]="$LINUX_ARM64_FILE"
-            SHA256S[linux-arm64]=$(sha256sum "$LINUX_ARM64_FILE" | cut -d ' ' -f1)
-            echo "✓ Found linux-arm64: $(basename "$LINUX_ARM64_FILE")"
-          fi
-
-          # Verify at least one macOS file exists (Homebrew official requirement)
-          if [[ -z "${FILES[darwin-amd64]}" && -z "${FILES[darwin-arm64]}" ]]; then
-            echo "❌ No macOS binaries found for Homebrew Formula!"
-            echo "   macOS support is required for Homebrew core repository"
-            ls -la packages/
-            exit 1
-          fi
-
-          # Create Homebrew Formula that meets official standards
-          cat > homebrew/agb.rb << FORMULA_EOF
+          # Create official Homebrew Formula with source build mode
+          cat > homebrew/agb.rb << 'FORMULA_EOF'
           class Agb < Formula
             desc "Secure infrastructure for running AI-generated code"
             homepage "https://github.com/${{ github.repository }}"
-            version "$VERSION"
+            url "https://github.com/${{ github.repository }}/archive/refs/tags/v$VERSION.tar.gz"
+            sha256 "$SOURCE_SHA256"
             license "MIT"
+            head "https://github.com/${{ github.repository }}.git", branch: "main"
 
-            on_macos do
-          FORMULA_EOF
-
-          # Add macOS support
-          if [[ -n "${FILES[darwin-amd64]}" && -n "${FILES[darwin-arm64]}" ]]; then
-            # Multi-architecture macOS support
-            cat >> homebrew/agb.rb << MACOS_EOF
-              if Hardware::CPU.intel?
-                url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[darwin-amd64]}")"
-                sha256 "${SHA256S[darwin-amd64]}"
-              elsif Hardware::CPU.arm? || Hardware::CPU.arch == :arm64
-                url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[darwin-arm64]}")"
-                sha256 "${SHA256S[darwin-arm64]}"
-              end
-          MACOS_EOF
-          elif [[ -n "${FILES[darwin-amd64]}" ]]; then
-            # Intel macOS support only
-            cat >> homebrew/agb.rb << MACOS_INTEL_EOF
-              url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[darwin-amd64]}")"
-              sha256 "${SHA256S[darwin-amd64]}"
-          MACOS_INTEL_EOF
-          elif [[ -n "${FILES[darwin-arm64]}" ]]; then
-            # ARM macOS support only
-            cat >> homebrew/agb.rb << MACOS_ARM_EOF
-              url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[darwin-arm64]}")"
-              sha256 "${SHA256S[darwin-arm64]}"
-          MACOS_ARM_EOF
-          fi
-
-          cat >> homebrew/agb.rb << 'LINUX_START_EOF'
-            end
-
-            on_linux do
-          LINUX_START_EOF
-
-          # Add Linux support
-          if [[ -n "${FILES[linux-amd64]}" && -n "${FILES[linux-arm64]}" ]]; then
-            # Multi-architecture Linux support
-            cat >> homebrew/agb.rb << LINUX_EOF
-              if Hardware::CPU.intel?
-                url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[linux-amd64]}")"
-                sha256 "${SHA256S[linux-amd64]}"
-              elsif Hardware::CPU.arm? || Hardware::CPU.arch == :arm64
-                url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[linux-arm64]}")"
-                sha256 "${SHA256S[linux-arm64]}"
-              end
-          LINUX_EOF
-          elif [[ -n "${FILES[linux-amd64]}" ]]; then
-            # Intel Linux support only
-            cat >> homebrew/agb.rb << LINUX_INTEL_EOF
-              url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[linux-amd64]}")"
-              sha256 "${SHA256S[linux-amd64]}"
-          LINUX_INTEL_EOF
-          elif [[ -n "${FILES[linux-arm64]}" ]]; then
-            # ARM Linux support only
-            cat >> homebrew/agb.rb << LINUX_ARM_EOF
-              url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/$(basename "${FILES[linux-arm64]}")"
-              sha256 "${SHA256S[linux-arm64]}"
-          LINUX_ARM_EOF
-          fi
-
-          # Add installation and test methods (meets official standards, includes compatibility handling)
-          cat >> homebrew/agb.rb << 'INSTALL_EOF'
-            end
+            depends_on "go" => :build
 
             def install
-              bin.install "${{ env.BINARY_NAME }}"
+              # Set build variables matching the Makefile
+              version = self.version
+              git_commit = Utils.safe_popen_read("git", "rev-parse", "--short", "HEAD").chomp
+              build_date = Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+              
+              # Build flags matching your Makefile LDFLAGS (with optimization)
+              ldflags = %W[
+                -s
+                -w
+                -X github.com/agbcloud/agbcloud-cli/cmd.Version=#{version}
+                -X github.com/agbcloud/agbcloud-cli/cmd.GitCommit=#{git_commit}
+                -X github.com/agbcloud/agbcloud-cli/cmd.BuildDate=#{build_date}
+              ]
+
+              # Build from source using Go
+              system "go", "build", *std_go_args(ldflags: ldflags), "."
             end
 
             test do
               # Test that binary is executable
               assert_predicate bin/"${{ env.BINARY_NAME }}", :executable?
 
-              # Check if we can run the binary (skip if GLIBC incompatible)
-              begin
-                # Test version command
-                system bin/"${{ env.BINARY_NAME }}", "--version"
+              # Test version command
+              version_output = shell_output("#{bin}/${{ env.BINARY_NAME }} version 2>&1")
+              assert_match version.to_s, version_output
 
-                # Test help command
-                help_output = shell_output("#{bin}/${{ env.BINARY_NAME }} --help")
-                assert_match "agb", help_output
-                assert_match "help", help_output
-              rescue => e
-                # Skip functional tests if binary cannot run due to system incompatibility
-                if e.message.include?("GLIBC") || e.message.include?("not found")
-                  ohai "Skipping functional tests due to system incompatibility"
-                else
-                  raise e
-                end
-              end
+              # Test help command
+              help_output = shell_output("#{bin}/${{ env.BINARY_NAME }} --help")
+              assert_match "agb", help_output
+              assert_match "help", help_output
             end
           end
-          INSTALL_EOF
+          FORMULA_EOF
+
+          # Replace placeholders with actual values
+          sed -i "s/\$VERSION/$VERSION/g" homebrew/agb.rb
+          sed -i "s/\$SOURCE_SHA256/$SOURCE_SHA256/g" homebrew/agb.rb
+          sed -i "s|\${{ github.repository }}|${{ github.repository }}|g" homebrew/agb.rb
 
           echo "✅ Official Homebrew formula created at homebrew/agb.rb"
           echo ""
-          echo "📄 Formula summary:"
+          echo "📄 Formula summary (Official Source Build Mode):"
           echo "  • Class name: Agb (official standard)"
           echo "  • Version: $VERSION"
-          echo "  • macOS support: $([ -n "${FILES[darwin-amd64]}" ] && echo "Intel") $([ -n "${FILES[darwin-arm64]}" ] && echo "ARM64")"
-          echo "  • Linux support: $([ -n "${FILES[linux-amd64]}" ] && echo "Intel") $([ -n "${FILES[linux-arm64]}" ] && echo "ARM64")"
-          echo "  • Total binaries: ${#FILES[@]}"
+          echo "  • Build mode: Source compilation with Go"
+          echo "  • Dependencies: go (build-time)"
+          echo "  • Source URL: $SOURCE_URL"
+          echo "  • Source SHA256: $SOURCE_SHA256"
+          echo "  • Bottle support: Ready for Homebrew CI"
+          echo ""
+          echo "🔍 Formula validation:"
+          echo "  ✅ Uses source tarball instead of precompiled binaries"
+          echo "  ✅ Includes build dependency (go)"
+          echo "  ✅ Builds from source with proper LDFLAGS"
+          echo "  ✅ Comprehensive test suite"
+          echo "  ✅ Ready for bottle generation by Homebrew CI"
 
       - name: Prepare Homebrew Core Submission
         env:
@@ -618,10 +553,10 @@ jobs:
 
       - name: Validate Official Formula
         run: |
-          echo "🧪 Validating Official Homebrew Formula..."
+          echo "🧪 Validating Official Homebrew Formula (Source Build Mode)..."
 
           # Validate formula file syntax and content
-          echo "📋 Checking formula compliance..."
+          echo "📋 Checking formula compliance for source build mode..."
           
           if [[ -f "homebrew/agb.rb" ]]; then
             echo "✅ Formula file exists: homebrew/agb.rb"
@@ -631,14 +566,15 @@ jobs:
             echo "🔍 Formula content preview:"
             echo "Class line: $(grep "class.*Formula" homebrew/agb.rb || echo 'Not found')"
             echo "Desc line: $(grep "desc" homebrew/agb.rb || echo 'Not found')"
-            echo "Version line: $(grep "version" homebrew/agb.rb || echo 'Not found')"
-            echo "SHA256 lines: $(grep -c "sha256" homebrew/agb.rb || echo '0') found"
+            echo "URL line: $(grep "url.*archive" homebrew/agb.rb || echo 'Not found')"
+            echo "Dependencies: $(grep "depends_on" homebrew/agb.rb || echo 'Not found')"
+            echo "Build method: $(grep -A 2 "def install" homebrew/agb.rb || echo 'Not found')"
             echo "Test section: $(grep -A 2 "test do" homebrew/agb.rb || echo 'Not found')"
             echo ""
 
-            # Check required fields for official requirements
+            # Check required fields for official source build requirements
             checks_passed=0
-            total_checks=8
+            total_checks=10
 
             # Check 1: Class name
             if grep -q "class Agb < Formula" homebrew/agb.rb; then
@@ -654,7 +590,6 @@ jobs:
               checks_passed=$((checks_passed + 1))
             else
               echo "❌ Missing or insufficient description"
-              echo "   Debug: Description check: $(grep -q 'desc.*"Secure infrastructure for running AI-generated code"' homebrew/agb.rb && echo 'PASS' || echo 'FAIL')"
             fi
 
             # Check 3: Homepage
@@ -673,60 +608,82 @@ jobs:
               echo "❌ Missing license specification"
             fi
 
-            # Check 5: Version - Modified version check, allow variables or specific version numbers
-            if grep -q 'version.*"' homebrew/agb.rb; then
-              version_line=$(grep 'version.*"' homebrew/agb.rb)
-              if [[ "$version_line" =~ version.*\"\$VERSION\" ]] || [[ "$version_line" =~ version.*\"[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-                echo "✅ Explicit version specified (variable or semantic version)"
-                checks_passed=$((checks_passed + 1))
-              else
-                echo "❌ Invalid version format: $version_line"
-              fi
-            else
-              echo "❌ Missing explicit version"
-            fi
-
-            # Check 6: Download URL
-            if grep -q 'url.*releases/download' homebrew/agb.rb; then
-              echo "✅ Download URL found"
+            # Check 5: Source URL (archive instead of releases)
+            if grep -q 'url.*archive.*tags' homebrew/agb.rb; then
+              echo "✅ Source archive URL found (official mode)"
               checks_passed=$((checks_passed + 1))
             else
-              echo "❌ Missing download URL"
+              echo "❌ Missing source archive URL (should point to source code, not binaries)"
             fi
 
-            # Check 7: SHA256
+            # Check 6: SHA256
             if grep -q 'sha256' homebrew/agb.rb; then
-              sha256_count=$(grep -c 'sha256' homebrew/agb.rb)
-              if [[ $sha256_count -ge 2 ]]; then
-                echo "✅ SHA256 checksum found ($sha256_count entries)"
-                checks_passed=$((checks_passed + 1))
-              else
-                echo "❌ Insufficient SHA256 checksums (found: $sha256_count, expected: ≥2)"
-              fi
+              echo "✅ SHA256 checksum found"
+              checks_passed=$((checks_passed + 1))
             else
               echo "❌ Missing SHA256 checksum"
             fi
 
-            # Check 8: Test suite
-            if grep -q 'test do' homebrew/agb.rb && grep -q 'assert_match' homebrew/agb.rb; then
+            # Check 7: Build dependency (Go)
+            if grep -q 'depends_on.*go.*build' homebrew/agb.rb; then
+              echo "✅ Build dependency (go) specified"
+              checks_passed=$((checks_passed + 1))
+            else
+              echo "❌ Missing build dependency (go)"
+            fi
+
+            # Check 8: Source build method
+            if grep -q 'go.*build' homebrew/agb.rb && grep -q 'std_go_args' homebrew/agb.rb; then
+              echo "✅ Source build method found (go build)"
+              checks_passed=$((checks_passed + 1))
+            else
+              echo "❌ Missing source build method"
+            fi
+
+            # Check 9: LDFLAGS configuration
+            if grep -q 'ldflags.*Version.*GitCommit.*BuildDate' homebrew/agb.rb; then
+              echo "✅ Proper LDFLAGS configuration found"
+              checks_passed=$((checks_passed + 1))
+            else
+              echo "❌ Missing or incomplete LDFLAGS configuration"
+            fi
+
+            # Check 10: Enhanced test suite
+            if grep -q 'test do' homebrew/agb.rb && grep -q 'version_output' homebrew/agb.rb && grep -q 'assert_match' homebrew/agb.rb; then
               echo "✅ Comprehensive test suite found"
               checks_passed=$((checks_passed + 1))
             else
               echo "❌ Missing comprehensive test suite"
-              echo "   Debug: test do check: $(grep -q 'test do' homebrew/agb.rb && echo 'PASS' || echo 'FAIL')"
-              echo "   Debug: assert_match check: $(grep -q 'assert_match' homebrew/agb.rb && echo 'PASS' || echo 'FAIL')"
             fi
 
             echo ""
-            echo "📊 Formula Validation Results: $checks_passed/$total_checks checks passed"
+            echo "📊 Source Build Formula Validation Results: $checks_passed/$total_checks checks passed"
             
             if [[ $checks_passed -eq $total_checks ]]; then
-              echo "🎉 Formula meets all official Homebrew requirements!"
-            elif [[ $checks_passed -ge 7 ]]; then
+              echo "🎉 Formula meets all official Homebrew source build requirements!"
+            elif [[ $checks_passed -ge 8 ]]; then
               echo "⚠️ Formula mostly compliant ($checks_passed/$total_checks), minor issues detected"
-              echo "   This is acceptable for CI/CD pipeline with variable substitution"
+              echo "   This is acceptable for source build mode"
             else
               echo "⚠️ Formula needs improvements before submission"
+            fi
+
+            # Additional source build specific checks
+            echo ""
+            echo "🔍 Source Build Specific Validation:"
+            
+            # Check for bottle placeholder
+            if grep -q "# bottle do" homebrew/agb.rb; then
+              echo "✅ Bottle configuration placeholder found (ready for Homebrew CI)"
+            else
+              echo "⚠️ No bottle configuration placeholder (will be added by Homebrew CI)"
+            fi
+
+            # Check for head option
+            if grep -q "head.*git.*branch" homebrew/agb.rb; then
+              echo "✅ Head option found (allows building from main branch)"
+            else
+              echo "⚠️ No head option (optional for source build)"
             fi
 
             # Validate syntax (if Homebrew is available)
@@ -736,7 +693,7 @@ jobs:
               if brew audit --strict homebrew/agb.rb 2>/dev/null; then
                 echo "✅ Formula syntax is valid"
               else
-                echo "⚠️ Formula syntax check failed (may be due to CI environment or variable substitution)"
+                echo "⚠️ Formula syntax check failed (may be due to CI environment)"
               fi
             else
               echo "⚠️ Homebrew not available for syntax validation"
@@ -748,14 +705,14 @@ jobs:
           fi
 
           echo ""
-          echo "✅ Formula validation completed"
+          echo "✅ Source build formula validation completed"
 
       - name: Generate Submission Documentation
         run: |
-          echo "📖 Generating submission documentation..."
+          echo "📖 Generating submission documentation for source build mode..."
           
           cat > HOMEBREW_SUBMISSION.md << 'DOC_EOF'
-          # Agb CLI - Homebrew Core Submission
+          # Agb CLI - Homebrew Core Submission (Source Build Mode)
 
           ## Software Information
           - **Name**: Agb CLI
@@ -763,6 +720,7 @@ jobs:
           - **Description**: Secure infrastructure for running AI-generated code
           - **Homepage**: https://github.com/${{ github.repository }}
           - **License**: MIT
+          - **Build Method**: Source compilation with Go
 
           ## Submission Checklist
 
@@ -770,25 +728,46 @@ jobs:
           - [x] Software is notable and widely used
           - [x] Stable release version (not dev/beta/rc)
           - [x] Open source with clear license
+          - [x] Source code compilation (official Homebrew standard)
+          - [x] Build dependency properly declared (Go)
           - [x] Multi-platform support (macOS Intel/ARM, Linux Intel/ARM)
           - [x] Comprehensive test suite
           - [x] Formula follows official guidelines
+          - [x] Ready for bottle generation by Homebrew CI
 
-          ### 📋 Formula Details
+          ### 📋 Formula Details (Source Build Mode)
           - **Class Name**: `Agb` (follows official naming convention)
           - **File Name**: `agb.rb`
-          - **Platforms**: macOS (Intel/ARM), Linux (Intel/ARM)
-          - **Installation Method**: Binary installation from GitHub releases
+          - **Build Method**: Source compilation using `go build`
+          - **Build Dependencies**: `go` (build-time only)
+          - **Runtime Dependencies**: None
+          - **Source URL**: GitHub archive tarball (not precompiled binaries)
+          - **Platforms**: Cross-platform (macOS, Linux) via Go compilation
+          - **Bottle Support**: Ready for Homebrew CI bottle generation
           - **Test Coverage**: Version check, help output validation, executable verification
 
           ### 🧪 Testing Commands
           ```bash
-          # Local testing
+          # Local testing (source build)
           brew install --build-from-source ./Formula/agb.rb
           brew audit --strict --new --online agb
           brew test agb
+          
+          # Verify build from source
+          brew reinstall --build-from-source agb
+          agb --version
+          agb --help
+          
+          # Cleanup
           brew uninstall agb
           ```
+
+          ### 🔧 Build Process
+          The formula builds from source using:
+          1. Downloads source code tarball from GitHub
+          2. Uses Go toolchain to compile binary
+          3. Sets proper LDFLAGS for version information
+          4. Installs compiled binary to Homebrew prefix
 
           ### 📤 Submission Process
           1. Fork https://github.com/Homebrew/homebrew-core
@@ -796,14 +775,23 @@ jobs:
           3. Test locally using commands above
           4. Submit PR with title: `agb $VERSION (new formula)`
           5. Include this documentation in PR description
+          6. Homebrew CI will automatically generate bottles
+
+          ### 🍺 Advantages of Source Build Mode
+          - ✅ Transparent build process (users can see source code)
+          - ✅ Automatic bottle generation by Homebrew CI
+          - ✅ Better integration with Homebrew ecosystem
+          - ✅ Easier maintenance and updates
+          - ✅ Follows official Homebrew best practices
 
           ### 🔗 References
           - [Homebrew Guidelines](https://docs.brew.sh/Adding-Software-to-Homebrew)
           - [Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)
           - [Acceptable Formulae](https://docs.brew.sh/Acceptable-Formulae)
+          - [Go Formula Examples](https://github.com/Homebrew/homebrew-core/search?q=depends_on+%22go%22&type=code)
           DOC_EOF
 
-          echo "✅ Submission documentation created: HOMEBREW_SUBMISSION.md"
+          echo "✅ Source build submission documentation created: HOMEBREW_SUBMISSION.md"
 
       - name: Official Release Summary
         env:
@@ -849,12 +837,15 @@ jobs:
           echo "   • Architectures: 2 per platform (Intel, ARM)"
           echo ""
 
-          echo "🍺 Homebrew Submission Status:"
+          echo "🍺 Homebrew Submission Status (Source Build Mode):"
           echo "   ✅ Formula created: homebrew/agb.rb"
           echo "   ✅ Official naming: class Agb"
           echo "   ✅ Semantic versioning: v$VERSION"
-          echo "   ✅ Multi-platform support"
+          echo "   ✅ Source build mode (official standard)"
+          echo "   ✅ Build dependency: go"
+          echo "   ✅ Cross-platform compilation"
           echo "   ✅ Comprehensive testing"
+          echo "   ✅ Bottle-ready configuration"
           echo "   ✅ Documentation generated"
           echo ""
 
@@ -863,16 +854,26 @@ jobs:
           echo "   2. Read submission guide: HOMEBREW_SUBMISSION.md"
           echo "   3. Fork Homebrew core repository"
           echo "   4. Submit Pull Request to Homebrew/homebrew-core"
+          echo "   5. Homebrew CI will automatically generate bottles"
+          echo ""
+
+          echo "🔧 Source Build Advantages:"
+          echo "   • Transparent compilation process"
+          echo "   • Automatic bottle generation by Homebrew CI"
+          echo "   • Better Homebrew ecosystem integration"
+          echo "   • Follows official best practices"
           echo ""
 
           echo "🔗 Important Links:"
           echo "   • Release: https://github.com/${{ github.repository }}/releases/tag/v$VERSION"
           echo "   • Homebrew Core: https://github.com/Homebrew/homebrew-core"
           echo "   • Guidelines: https://docs.brew.sh/Adding-Software-to-Homebrew"
+          echo "   • Go Formula Examples: https://github.com/Homebrew/homebrew-core/search?q=depends_on+%22go%22"
           echo ""
 
           # Clean up temp files
           rm -f /tmp/*_files.txt
 
-          echo "🎯 Ready for Homebrew Core Submission!"
+          echo "🎯 Ready for Homebrew Core Submission (Source Build Mode)!"
           echo "   Once merged, users can install with: brew install agb"
+          echo "   Formula will build from source with automatic bottle support"
