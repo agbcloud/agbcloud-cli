@@ -450,9 +450,19 @@ jobs:
             def install
               # Set build variables matching the Makefile
               version = self.version
-              git_commit = Utils.safe_popen_read("git", "rev-parse", "--short", "HEAD").chomp
+              # Handle git commit safely (archive tarball doesn't have .git directory)
+              git_commit = begin
+                Utils.safe_popen_read("git", "rev-parse", "--short", "HEAD").chomp
+              rescue
+                "unknown"
+              end
               build_date = Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-              
+
+              # Set Go proxy for better network connectivity (especially in China)
+              ENV["GOPROXY"] = "https://goproxy.cn,https://goproxy.io,https://proxy.golang.org,direct"
+              ENV["GOSUMDB"] = "sum.golang.google.cn"
+              ENV["GO111MODULE"] = "on"
+
               # Build flags matching your Makefile LDFLAGS (with optimization)
               ldflags = %W[
                 -s
