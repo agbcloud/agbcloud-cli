@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v4
@@ -425,12 +427,8 @@ jobs:
             def install
               # Set build variables matching the Makefile
               version = self.version
-              # Handle git commit safely (archive tarball doesn't have .git directory)
-              git_commit = begin
-                Utils.safe_popen_read("git", "rev-parse", "--short", "HEAD").chomp
-              rescue
-                "unknown"
-              end
+              # Use embedded git commit from build time (since tarball has no .git directory)
+              git_commit = "$GIT_COMMIT"
               build_date = Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
               # Set Go proxy for better network connectivity (especially in China)
@@ -470,6 +468,7 @@ jobs:
           # Replace placeholders with actual values
           sed -i "s/\$VERSION/$VERSION/g" homebrew/agb.rb
           sed -i "s/\$SOURCE_SHA256/$SOURCE_SHA256/g" homebrew/agb.rb
+          sed -i "s/\$GIT_COMMIT/$GIT_COMMIT/g" homebrew/agb.rb
           sed -i "s|\${{ github.repository }}|${{ github.repository }}|g" homebrew/agb.rb
 
           echo "✅ Official Homebrew formula created at homebrew/agb.rb"
