@@ -277,31 +277,6 @@ jobs:
 
           ls -la packages/
 
-      - name: Create Server Files
-        run: |
-          echo "Creating server files..."
-
-          # Make the script executable and run it
-          if [[ -f "scripts/generate-server-files.sh" ]]; then
-            chmod +x scripts/generate-server-files.sh
-            ./scripts/generate-server-files.sh
-          else
-            echo "⚠️ Server files generation script not found, creating basic files..."
-            mkdir -p server-files
-
-            # Create a basic latest.json file
-            cat > server-files/latest.json << EOF
-          {
-            "version": "$VERSION",
-            "git_commit": "$GIT_COMMIT",
-            "build_date": "$BUILD_DATE"
-          }
-          EOF
-
-            echo "✓ Basic server files created"
-          fi
-
-          echo "✅ Server files processing completed"
 
       - name: Organize Release Files
         id: organize-files
