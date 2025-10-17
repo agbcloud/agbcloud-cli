@@ -26,7 +26,7 @@ Before installing AgbCloud CLI, please ensure:
 Install AgbCloud CLI with a single PowerShell command:
 
 ```powershell
-powershell -Command "irm https://litiantian123-code.github.io/agbcloud-cli/windows | iex"
+powershell -Command "irm https://agbcloud.github.io/agbcloud-cli/windows | iex"
 ```
 
 ### Installation Process
