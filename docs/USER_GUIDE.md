@@ -1,9 +1,12 @@
 # AgbCloud CLI User Guide
 
 This guide will walk you through how to use the AgbCloud CLI tool for image management operations.
-
 ## Table of Contents
 
+- [Installation](#installation)
+  - [Windows](#windows)
+  - [macOS/Linux](#macoslinux)
+  - [Uninstallation](#uninstallation)
 - [Prerequisites](#prerequisites)
 - [1. Login Authentication](#1-login-authentication)
 - [2. Create Image](#2-create-image)
@@ -11,6 +14,54 @@ This guide will walk you through how to use the AgbCloud CLI tool for image mana
 - [4. Deactivate Image](#4-deactivate-image)
 - [5. List Images](#5-list-images)
 - [FAQ](#faq)
+
+## Installation
+
+### Windows
+
+Install AgbCloud CLI using PowerShell:
+
+```powershell
+powershell -Command "irm https://agbcloud.github.io/agbcloud-cli/windows | iex"
+```
+
+For detailed Windows installation instructions, troubleshooting, and system requirements, see WINDOWS_INSTALL.
+
+### macOS/Linux
+
+Install AgbCloud CLI using Homebrew:
+
+```bash
+# 1. Add Agb Cloud's Homebrew tap
+brew tap agbcloud/agb
+
+# 2. Install agb command-line tool
+brew install agb
+
+# 3. Verify installation
+agb version
+```
+
+For more details about Homebrew installation, visit the LINUX&MAC_INSTALL.
+
+### Uninstallation
+
+#### Windows
+```powershell
+# Remove installation directory
+Remove-Item -Path "$env:LOCALAPPDATA\agbcloud" -Recurse -Force
+```
+
+#### macOS/Linux
+```bash
+# Uninstall agb
+brew uninstall agb
+
+# Remove tap (optional)
+brew untap aliyun/agb
+```
+
+
 
 ## Prerequisites
 
