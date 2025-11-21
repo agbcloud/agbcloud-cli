@@ -25,8 +25,6 @@ Install AgbCloud CLI using PowerShell:
 powershell -Command "irm https://agbcloud.github.io/agbcloud-cli/windows | iex"
 ```
 
-For detailed Windows installation instructions, troubleshooting, and system requirements, see WINDOWS_INSTALL.
-
 ### macOS/Linux
 
 Install AgbCloud CLI using Homebrew:
@@ -42,7 +40,6 @@ brew install agb
 agb version
 ```
 
-For more details about Homebrew installation, visit the LINUX&MAC_INSTALL.
 
 ### Uninstallation
 
