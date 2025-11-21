@@ -54,7 +54,7 @@ agb image --help
 agb -v image create myapp -f ./Dockerfile -i agb-code-space-1
 ```
 
-For detailed usage instructions and examples, see the [User Guide](docs/USER_GUIDE.md).
+For detailed installation steps, usage instructions and examples, see the [User Guide](docs/USER_GUIDE.md).
 
 ## License
 
